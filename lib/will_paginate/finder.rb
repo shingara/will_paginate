@@ -58,6 +58,7 @@ module WillPaginate
       # * <tt>:total_entries</tt> -- use only if you manually count total entries
       # * <tt>:count</tt> -- additional options that are passed on to +count+
       # * <tt>:finder</tt> -- name of the ActiveRecord finder used (default: "find")
+      # * <tt>:shift</tt> -- the shift before for the offset 
       #
       # All other options (+conditions+, +order+, ...) are forwarded to +find+
       # and +count+ calls.
@@ -74,8 +75,13 @@ module WillPaginate
         end
 
         WillPaginate::Collection.create(page, per_page, total_entries) do |pager|
-          count_options = options.except :page, :per_page, :total_entries, :finder
-          find_options = count_options.except(:count).update(:offset => pager.offset, :limit => pager.per_page) 
+          count_options = options.except :page, :per_page, :total_entries, :finder, :shift
+          if options[:shift]
+            offset = pager.offset - options[:shift]
+          else
+            offset = pager.offset
+          end
+          find_options = count_options.except(:count).update(:offset => offset, :limit => pager.per_page) 
           
           args << find_options
           # @options_from_last_find = nil
