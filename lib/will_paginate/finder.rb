@@ -110,7 +110,10 @@ module WillPaginate
         
         begin 
           collection = paginate(options)
-          total += collection.each(&block).size
+          with_exclusive_scope(:find => {}) do
+            # using exclusive scope so that the block is yielded in scope-free context
+            total += collection.each(&block).size
+          end
           options[:page] += 1
         end until collection.size < collection.per_page
         
@@ -187,7 +190,20 @@ module WillPaginate
       # in the database. It relies on the ActiveRecord +count+ method.
       def wp_count(options, args, finder)
         excludees = [:count, :order, :limit, :offset, :readonly]
-        unless options[:select] and options[:select] =~ /^\s*DISTINCT\b/i
+        excludees << :from unless ActiveRecord::Calculations::CALCULATIONS_OPTIONS.include?(:from)
+
+        # we may be in a model or an association proxy
+        klass = (@owner and @reflection) ? @reflection.klass : self
+
+        # Use :select from scope if it isn't already present.
+        options[:select] = scope(:find, :select) unless options[:select]
+
+        if options[:select] and options[:select] =~ /^\s*DISTINCT\b/i
+          # Remove quoting and check for table_name.*-like statement.
+          if options[:select].gsub('`', '') =~ /\w+\.\*/
+            options[:select] = "DISTINCT #{klass.table_name}.#{klass.primary_key}"
+          end
+        else
           excludees << :select # only exclude the select param if it doesn't begin with DISTINCT
         end
 
@@ -197,10 +213,7 @@ module WillPaginate
         # merge the hash found in :count
         # this allows you to specify :select, :order, or anything else just for the count query
         count_options.update options[:count] if options[:count]
-        
-        # we may be in a model or an association proxy
-        klass = (@owner and @reflection) ? @reflection.klass : self
-        
+
         # forget about includes if they are irrelevant (Rails 2.1)
         if count_options[:include] and
             klass.private_methods.include?('references_eager_loaded_tables?') and
@@ -215,9 +228,9 @@ module WillPaginate
                   # scope_out adds a 'with_finder' method which acts like with_scope, if it's present
                   # then execute the count with the scoping provided by the with_finder
                   send(scoper, &counter)
-                elsif match = /^find_(all_by|by)_([_a-zA-Z]\w*)$/.match(finder)
+                elsif finder =~ /^find_(all_by|by)_([_a-zA-Z]\w*)$/
                   # extract conditions from calls like "paginate_by_foo_and_bar"
-                  attribute_names = extract_attribute_names_from_match(match)
+                  attribute_names = $2.split('_and_')
                   conditions = construct_attributes_from_arguments(attribute_names, args)
                   with_scope(:find => { :conditions => conditions }, &counter)
                 else
