@@ -18,6 +18,7 @@ lib/will_paginate/finders/active_record/named_scope.rb
 lib/will_paginate/finders/active_record/named_scope_patch.rb
 lib/will_paginate/finders/active_resource.rb
 lib/will_paginate/finders/base.rb
+lib/will_paginate/finders/couchrest.rb
 lib/will_paginate/finders/data_mapper.rb
 lib/will_paginate/finders/sequel.rb
 lib/will_paginate/version.rb
